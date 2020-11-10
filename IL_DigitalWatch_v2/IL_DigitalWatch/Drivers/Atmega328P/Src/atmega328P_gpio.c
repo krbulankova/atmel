@@ -162,17 +162,17 @@ void Clock_Count_Up() {
 	//		|		|		|
 	//		v		v		v
 	//		8+1=9		0		90
-	if (secOnes > 9)
+	if (secOnes > 9)	(secOnes < 0)
 	{
-		secOnes = 0;
-		secTens++;
+		secOnes = 0;	secones=9;
+		secTens++;	secTens--;
 	}
 	
 	// если счётчик десяток для секунд переваливает за 5 (60), то уже +минута
-	if (secTens > 5)
+	if (secTens > 5)	(sectens < 0)
 	{
-		secTens = 0;
-		minOnes++;
+		secTens = 0;	secTens = 5;(mozet bit 6)
+		minOnes++;	minOnes--;
 	}
 	
 	// анадогично для минут
