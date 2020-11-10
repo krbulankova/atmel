@@ -31,8 +31,8 @@
 
 uint8_t Display_mm_ss [4] = {d0, d1, d2, d3};
 uint8_t Display_hh_mm [4] = {0, 0, 0, 0};
-uint8_t DisplayDigitHolder [10] = {d0, d1, d2, d3, d4, d5, d6, d7, d8, d9}; // priek� displeja ciparu att?lo�anas
-uint8_t DisplayDigitScan [4] = {dt3, dt2, dt1, dt0}; // priek� displeja izvadu multipleks?�anas
+uint8_t DisplayDigitHolder [10] = {d0, d1, d2, d3, d4, d5, d6, d7, d8, d9}; // priekš displeja ciparu att?lošanas
+uint8_t DisplayDigitScan [4] = {dt3, dt2, dt1, dt0}; // priekš displeja izvadu multipleks?šanas
 uint8_t DigitUpdate [6];
 uint8_t TC0_i = 0;
 
@@ -48,9 +48,9 @@ void Init_Ports()
 {
 	DDRD = 0b11111110;		// DDRD - porta D datu virziena re?istrs
 							// porta D izvadi PD1 l?dz PD7 konfigur?ti darb?bai uz izvadi
-							// priek� displeja segmentiem a l?dz g,
+							// priekš displeja segmentiem a l?dz g,
 							// kur PD1-a, PD2-b, PD3-c, PD4-d, PD5-e, PD6-g, PD7-g
-							// savuk?rt PD0: darb?bai uz ievadi, priek� USART RX (seri?l? komunik?cija)
+							// savuk?rt PD0: darb?bai uz ievadi, priekš USART RX (seri?l? komunik?cija)
 	
 	DDRC = 0x1F;			// DDRD - porta C datu virziena re?istrs,ACTIVIZETI IZVADI:PC0, PC1,PC2, PC3, PC4
 							// izvadi PC0 l?dz PC3 konfigur?ti darb?bai uz izvadi
@@ -62,7 +62,7 @@ void Init_Ports()
 void Init_TC0()
 {
 	TCNT0 = 0;
-	OCR0A = 30;					// lai nodro�in?tu displeja kop?jo atjauno�an?s laiku aptuveni 8 ms
+	OCR0A = 30;					// lai nodrošin?tu displeja kop?jo atjaunošan?s laiku aptuveni 8 ms
 								// ik nepilnas 2 ms iesl?dzot/izsl?dzot katru no displeja cipariem
 	
 	TIMSK0 |= (1 << OCIE0A);	// timer/counter mask Register 0
@@ -83,10 +83,10 @@ void Init_TC1()
 
 void Init_USART()
 {
-	UBRR0 = 103;							 // lai nodro�in?tu baud rate = 9600
+	UBRR0 = 103;							 // lai nodrošin?tu baud rate = 9600
 	
-	UCSR0B = (1 << RXEN0) | (1 << RXCIE0);	 // lai aktiviz?tu MCU perif?rijas USART uztvero�?s (RX) da?as bloku
-	UCSR0C = (1 << UCSZ00) | (1 << UCSZ01);  // lai nodro�in?tu datu kadra izm?ru: 8 biti
+	UCSR0B = (1 << RXEN0) | (1 << RXCIE0);	 // lai aktiviz?tu MCU perif?rijas USART uztveroš?s (RX) da?as bloku
+	UCSR0C = (1 << UCSZ00) | (1 << UCSZ01);  // lai nodrošin?tu datu kadra izm?ru: 8 biti
 }
 
 
@@ -146,25 +146,36 @@ void TC1_Start ()
 	TCCR1B |= (1 << CS12) | (1 << CS10);
 }
 
-ISR (TIMER1_COMPA_vect)			
-{
-	// notiks p?reja uz �o p?rtraukuma apstr?des proced?ru, tad kad TCNT1 = OCR1A jeb TCNT1 = 15625, jo �? v?rt?ba ir ierakst?ta
-	// ar? re?istr? OCR1A (OCR1A = 15625) ISR izpild?sies ik p?c vienas sekundes izmanto sekun�u skait?�anai
+// Как запрошено в задании 2.1 вынимаем тело вычислений времени в отдельную функцию
+void Clock_Count_Up() {
+	// счётчики устроены поциферно [0..9]
 	
-	secOnes++;
-						
+	secOnes++; // Увеличиваем счётсчик секунд на 1 (прошла же одна секунда?)
+	
+	// если счётчик единиц для секунд переваливает за 9, это уже десятки.. увеличиваем десяток
+	//  на 1, а единицу возвращаем обратно в 0, например
+	// seconds 	seccTens	secOnes		'human' seconds
+	// ...		...		...		...
+	// n		8		8		88
+	// n+1		8		8+1=9		89
+	// n+2		8		9+1=10		9(10)
+	//		|		|		|
+	//		v		v		v
+	//		8+1=9		0		90
 	if (secOnes > 9)
 	{
 		secOnes = 0;
 		secTens++;
 	}
 	
+	// если счётчик десяток для секунд переваливает за 5 (60), то уже +минута
 	if (secTens > 5)
 	{
 		secTens = 0;
 		minOnes++;
 	}
 	
+	// анадогично для минут
 	if (minOnes > 9)
 	{
 		minOnes = 0;
@@ -183,6 +194,7 @@ ISR (TIMER1_COMPA_vect)
 		hourTens++;
 	}
 	
+	// каждые 42 часа счётчик сбрасывается (не у меня спрашивай, зачем)
 	if (hourTens >=4 && hourOnes >=2)
 	{
 		secOnes = 0;
@@ -192,6 +204,15 @@ ISR (TIMER1_COMPA_vect)
 		hourOnes = 0;
 		hourTens = 0;
 	}
+}
+
+// Тело данной препроцессорной функции вызывается, как тут сказано, раз в секунду
+ISR (TIMER1_COMPA_vect)			
+{
+	// notiks p?reja uz šo p?rtraukuma apstr?des proced?ru, tad kad TCNT1 = OCR1A jeb TCNT1 = 15625, jo š? v?rt?ba ir ierakst?ta
+	// ar? re?istr? OCR1A (OCR1A = 15625) ISR izpild?sies ik p?c vienas sekundes izmanto sekunžu skait?šanai
+	
+	Clock_Count_Up();
 	
 	DigitUpdate [0] = DisplayDigitHolder [secOnes];
 	DigitUpdate [1] = DisplayDigitHolder [secTens];
@@ -217,8 +238,8 @@ ISR (TIMER0_COMPA_vect)
 {
 	uint8_t temp;
 	
-// notiks p?reja uz �o p?rtraukuma apstr?des proced?ru, tad kad TCNT0 = OCR0A jeb TCNT0 = 30, jo �? v?rt?ba ir ierakst?ta
-// ar? re?istr? OCR1A (OCR1A = 30) ISR izpild?sies ik p?c aptveni 2 ms izmanto displeja kop?go izvadu (kur piesl?gti tranzsitori) multipleks?�anai
+// notiks p?reja uz šo p?rtraukuma apstr?des proced?ru, tad kad TCNT0 = OCR0A jeb TCNT0 = 30, jo š? v?rt?ba ir ierakst?ta
+// ar? re?istr? OCR1A (OCR1A = 30) ISR izpild?sies ik p?c aptveni 2 ms izmanto displeja kop?go izvadu (kur piesl?gti tranzsitori) multipleks?šanai
 	
 	if (modeCheck == 'm')
 	{
@@ -229,7 +250,7 @@ ISR (TIMER0_COMPA_vect)
 	{
 		PORTD = Display_hh_mm [TC0_i];
 	}
-	temp = PINC;//porta las?�anas re?istrs
+	temp = PINC;//porta las?šanas re?istrs
 	temp = temp & 0x10;
 		
 	
@@ -245,8 +266,8 @@ ISR (TIMER0_COMPA_vect)
 
 ISR (USART_RX_vect)
 {
-								// notiks p?reja uz �o p?rtraukuma apstr?des proced?ru, tad
-								// seri?l?s perif?rijas USART datu sa?em�anas re?istr? UDR (USART Data Register)
+								// notiks p?reja uz šo p?rtraukuma apstr?des proced?ru, tad
+								// seri?l?s perif?rijas USART datu sa?emšanas re?istr? UDR (USART Data Register)
 								// tiks sa?emts baits (piem?ram, nos?tot no datora simbolu, izmantojot klaviat?ru)
 	/*USARTReadBuffer = UDR0;
 	
